@@ -37,6 +37,11 @@ cd KISS-Matcher
 make cppinstall
 ```
 
+__CHANGES__:
+In order to be able to link the KISS-Matcher _c++_ lib to our shared lib project, [this CMakeLists.txt](cpp/kiss_matcher/CMakeLists.txt) has been edited in order to explicitly define that kiss-matcher should be compiled into a SHARED library. 
+
+Because we are currently working with cmake 3.16, the robin.cmake file has been excluded from the main Makefile (Robin needs cmake >= 3.18). Robin should be installed from sources downgrading the cmake version.
+
 <details>
   <summary><strong>Q. How doest it work?</a></strong></summary>
 
