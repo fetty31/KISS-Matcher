@@ -49,7 +49,13 @@ class ROBINMatching {
       float tuple_scale   = 0.95,
       bool use_ratio_test = false);
 
-  std::vector<std::pair<int, int>> getCrossCheckedCorrespondences() {
+  // For a deeper understanding, please refer to Section III.D
+  // ttps://arxiv.org/pdf/2409.15615
+  std::vector<size_t> applyOutlierPruning(const std::vector<Eigen::Vector3f>& src_matched,
+                                          const std::vector<Eigen::Vector3f>& tgt_matched,
+                                          const std::string& robin_mode = "max_core");
+
+  inline std::vector<std::pair<int, int>> getCrossCheckedCorrespondences() {
     std::vector<std::pair<int, int>> corres_out;
     corres_out.reserve(corres_cross_checked_.size());
     for (const auto& corres_tuple : corres_cross_checked_) {
@@ -62,11 +68,11 @@ class ROBINMatching {
     return corres_out;
   }
 
-  std::vector<std::pair<int, int>> getCrosscheckedCorrespondences() {
+  inline std::vector<std::pair<int, int>> getCrosscheckedCorrespondences() {
     return corres_cross_checked_;
   }
 
-  std::vector<std::pair<int, int>> getFinalCorrespondences() { return corres_; }
+  inline std::vector<std::pair<int, int>> getFinalCorrespondences() { return corres_; }
 
   double getRejectionTime() { return rejection_time_; }
 
@@ -112,9 +118,11 @@ class ROBINMatching {
                     std::vector<std::pair<int, int>>& corres_out,
                     const float tuple_scale);
 
-  void runTupleTestWithROBIN(const std::vector<std::pair<int, int>>& corres,
-                             std::vector<std::pair<int, int>>& corres_out,
-                             const std::string& robin_mode);
+  // For a deeper understanding, please refer to Section III.D
+  // ttps://arxiv.org/pdf/2409.15615
+  void applyOutlierPruning(const std::vector<std::pair<int, int>>& corres,
+                           std::vector<std::pair<int, int>>& corres_out,
+                           const std::string& robin_mode = "max_core");
 
   std::vector<std::pair<int, int>> corres_cross_checked_;
   std::vector<std::pair<int, int>> corres_;
