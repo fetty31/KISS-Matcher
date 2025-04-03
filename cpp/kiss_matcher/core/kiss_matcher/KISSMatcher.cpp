@@ -205,4 +205,14 @@ void KISSMatcher::print() {
   std::cout << "=================================="
             << "\n";
 }
+KISSMatcherScore KISSMatcher::getScore(){
+
+  KISSMatcherScore score;
+  score.initial_pairs = robin_matching_->getNumInitialCorrespondences();
+  score.pruned_pairs = robin_matching_->getNumPrunedCorrespondences();
+  score.rot_inliers = solver_->getRotationInliers().size();
+  score.trans_inliers = solver_->getTranslationInliers().size();
+  return score;
+}
+
 }  // namespace kiss_matcher

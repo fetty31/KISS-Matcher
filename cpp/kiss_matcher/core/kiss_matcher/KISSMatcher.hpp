@@ -28,7 +28,12 @@
 
 namespace kiss_matcher {
 using KeypointPair = std::tuple<std::vector<Eigen::Vector3f>, std::vector<Eigen::Vector3f>>;
-
+struct KISSMatcherScore {
+  size_t initial_pairs;
+  size_t pruned_pairs;
+  long unsigned int rot_inliers;
+  long unsigned int trans_inliers;
+};
 struct KISSMatcherConfig {
   bool use_voxel_sampling_ = true;
 
@@ -117,7 +122,8 @@ struct KISSMatcherConfig {
 
 class KISSMatcher {
  public:
-  std::unique_ptr<FasterPFH> faster_pfh_;
+  KISSMatcherScore getScore();  
+	std::unique_ptr<FasterPFH> faster_pfh_;
   std::unique_ptr<ROBINMatching> robin_matching_;
   std::unique_ptr<RobustRegistrationSolver> solver_;
 
