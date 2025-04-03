@@ -124,9 +124,6 @@ class KISSMatcher {
  public:
 
   KISSMatcherScore getScore();  
-	std::unique_ptr<FasterPFH> faster_pfh_;
-  std::unique_ptr<ROBINMatching> robin_matching_;
-  std::unique_ptr<RobustRegistrationSolver> solver_;
 
   /**
    * @brief Constructor that initializes KISSMatcher with a voxel size.
