@@ -143,7 +143,7 @@ void ROBINMatching::match(const std::string& robin_mode, float tuple_scale, bool
   if (robin_mode == "None") {
     runTupleTest(corres_cross_checked_, corres_, tuple_scale);
   } else if (robin_mode == "max_core" || robin_mode == "max_clique") {
-    runTupleTestWithROBIN(corres_cross_checked_, corres_, robin_mode);
+    applyOutlierPruning(corres_cross_checked_, corres_, robin_mode);
   } else {
     std::invalid_argument("Wrong ROBIN mode has come.");
   }
@@ -278,9 +278,9 @@ void ROBINMatching::runTupleTest(const std::vector<std::pair<int, int>>& corres,
   }
 }
 
-void ROBINMatching::runTupleTestWithROBIN(const std::vector<std::pair<int, int>>& corres,
-                                          std::vector<std::pair<int, int>>& corres_out,
-                                          const std::string& robin_mode) {
+void ROBINMatching::applyOutlierPruning(const std::vector<std::pair<int, int>>& corres,
+                                        std::vector<std::pair<int, int>>& corres_out,
+                                        const std::string& robin_mode) {
   if (!corres.empty()) {
     size_t ncorr = corres.size();
     std::vector<bool> is_already_included(ncorr, false);
@@ -298,6 +298,8 @@ void ROBINMatching::runTupleTestWithROBIN(const std::vector<std::pair<int, int>>
     auto* g = robin::Make3dRegInvGraph(src_robin, tgt_robin, noise_bound_);
 
     const auto& filtered_indices = [&]() {
+      // NOTE(hlim): Just use max core mode.
+      // `max_clique` not only took more time but also showed slightly worse performance.
       if (robin_mode == "max_core") {
         return robin::FindInlierStructure(g, robin::InlierGraphStructure::MAX_CORE);
       } else if (robin_mode == "max_clique") {
@@ -321,6 +323,45 @@ void ROBINMatching::runTupleTestWithROBIN(const std::vector<std::pair<int, int>>
   } else {
     std::invalid_argument("Wrong tuple constraint has come.");
   }
+}
+
+std::vector<size_t> ROBINMatching::applyOutlierPruning(
+    const std::vector<Eigen::Vector3f>& src_matched,
+    const std::vector<Eigen::Vector3f>& tgt_matched,
+    const std::string& robin_mode) {
+  if (src_matched.size() != tgt_matched.size()) {
+    std::runtime_error("The size of `src_matched` and `tgt_matched` should be same.");
+  }
+  if (src_matched.size() < 2 || tgt_matched.size() < 2) {
+    std::runtime_error("Too few matched points are given.");
+  }
+
+  Eigen::Matrix<double, 3, Eigen::Dynamic> src_robin(3, src_matched.size());
+  Eigen::Matrix<double, 3, Eigen::Dynamic> tgt_robin(3, tgt_matched.size());
+
+  num_init_corr_ = src_matched.size();
+#pragma omp parallel for
+  for (size_t i = 0; i < num_init_corr_; ++i) {
+    src_robin.col(i) = src_matched[i].cast<double>();
+    tgt_robin.col(i) = tgt_matched[i].cast<double>();
+  }
+
+  auto* g = robin::Make3dRegInvGraph(src_robin, tgt_robin, noise_bound_);
+
+  const auto& filtered_indices = [&]() {
+    // NOTE(hlim): Just use max core mode.
+    // `max_clique` not only took more time but also showed slightly worse performance.
+    if (robin_mode == "max_core") {
+      return robin::FindInlierStructure(g, robin::InlierGraphStructure::MAX_CORE);
+    } else if (robin_mode == "max_clique") {
+      return robin::FindInlierStructure(g, robin::InlierGraphStructure::MAX_CLIQUE);
+    } else {
+      throw std::runtime_error("Something's wrong!");
+    }
+  }();
+
+  num_pruned_corr_ = filtered_indices.size();
+  return filtered_indices;
 }
 
 template <typename T>

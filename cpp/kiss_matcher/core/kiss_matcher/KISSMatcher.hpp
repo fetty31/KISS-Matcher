@@ -122,41 +122,140 @@ struct KISSMatcherConfig {
 
 class KISSMatcher {
  public:
+
   KISSMatcherScore getScore();  
 	std::unique_ptr<FasterPFH> faster_pfh_;
   std::unique_ptr<ROBINMatching> robin_matching_;
   std::unique_ptr<RobustRegistrationSolver> solver_;
 
+  /**
+   * @brief Constructor that initializes KISSMatcher with a voxel size.
+   * @param voxel_size Size of the voxel grid used for setting other parameters.
+   */
   explicit KISSMatcher(const float &voxel_size);
 
+  /**
+   * @brief Constructor that initializes KISSMatcher with a configuration object.
+   * @param config Configuration parameters for the matcher.
+   */
   explicit KISSMatcher(const KISSMatcherConfig &config);
 
+  /**
+   * @brief reset function
+   */
   void reset();
 
+  /**
+   * @brief Resets the solver, used before pose estimation.
+   * @note This function should call before pose estimation.
+   */
   void resetSolver();
 
-  KeypointPair match(const std::vector<Eigen::Vector3f> &src_voxelized,
-                     const std::vector<Eigen::Vector3f> &tgt_voxelized);
+  /**
+   * @brief Matches keypoints between source and target voxelized point clouds.
+   * @param src Source point cloud.
+   * @note Input clouds are automatically voxelized depending on `config_.use_voxel_sampling_`
+   * @param tgt Target point cloud.
+   * @return A pair of matched keypoints.
+   */
+  KeypointPair match(const std::vector<Eigen::Vector3f> &src,
+                     const std::vector<Eigen::Vector3f> &tgt);
 
-  KeypointPair match(const Eigen::Matrix<double, 3, Eigen::Dynamic> &src_voxelized,
-                     const Eigen::Matrix<double, 3, Eigen::Dynamic> &tgt_voxelized);
+  /**
+   * @brief Matches keypoints between source and target voxelized point clouds (Eigen format).
+   * @param src Source point cloud in Eigen format.
+   * @param tgt Target point cloud in Eigen format.
+   * @return A pair of matched keypoints.
+   */
+  KeypointPair match(const Eigen::Matrix<double, 3, Eigen::Dynamic> &src,
+                     const Eigen::Matrix<double, 3, Eigen::Dynamic> &tgt);
 
+  /**
+   * @brief Estimates the transformation between source and target point clouds.
+   * @param src Source point cloud.
+   * @param tgt Target point cloud.
+   * @return The estimated registration solution.
+   */
   RegistrationSolution estimate(const std::vector<Eigen::Vector3f> &src,
-                                const std::vector<Eigen::Vector3f> &dst);
+                                const std::vector<Eigen::Vector3f> &tgt);
 
-  KeypointPair getKeypointsFromFasterPFH();
+  /**
+   * @brief Solves for the optimal transformation using matched keypoints.
+   * This function assumes that the correspondences have already been established.
+   * @param src_matched Source keypoints matrix.
+   * @param tgt_matched Target keypoints matrix.
+   * @return The estimated registration solution.
+   */
+  RegistrationSolution solve(const Eigen::Matrix<double, 3, Eigen::Dynamic> &src_matched,
+                             const Eigen::Matrix<double, 3, Eigen::Dynamic> &tgt_matched);
 
-  KeypointPair getKeypointsFromInitialMatching();
+  /**
+   * @brief Prunes outliers and then solves for registration.
+   * This function applies outlier filtering before estimating the transformation,
+   * and assumes that the correspondences have already been established.
+   * @param src_matched Source point cloud keypoints.
+   * @param tgt_matched Target point cloud keypoints.
+   * @return The estimated registration solution after pruning.
+   */
+  RegistrationSolution pruneAndSolve(const std::vector<Eigen::Vector3f> &src_matched,
+                                     const std::vector<Eigen::Vector3f> &tgt_matched);
 
-  std::vector<std::pair<int, int>> getInitialCorrespondences() {
+  /**
+   * @brief Retrieves input point clouds of FasterPFH.
+   * @note Once, `config_.use_voxel_sampling_` is true, it outputs voxelized clouds
+   * @return A pair of nput point clouds.
+   */
+  inline KeypointPair getProcessedInputClouds() { return {src_processed_, tgt_processed_}; }
+
+  /**
+   * @brief Retrieves keypoints detected from FasterPFH.
+   * @note The number of these keypoints is slightly smaller than
+   * or equal to the number of processed clouds.
+   * @return A pair of keypoints from FasterPFH.
+   */
+  inline KeypointPair getKeypointsFromFasterPFH() { return {src_keypoints_, tgt_keypoints_}; }
+
+  /**
+   * @brief Retrieves keypoints from the initial matching stage.
+   * @note This function should be called after `match` function
+   * @return A pair of initially matched keypoints.
+   */
+  inline KeypointPair getKeypointsFromInitialMatching() { return {src_matched_, tgt_matched_}; }
+
+  /**
+   * @brief Retrieves the initial correspondences before refinement.
+   * @return A list of initial correspondences (index pairs).
+   */
+  inline std::vector<std::pair<int, int>> getInitialCorrespondences() {
     return robin_matching_->getCrossCheckedCorrespondences();
   }
 
-  std::vector<std::pair<int, int>> getFinalCorrespondences() {
+  /**
+   * @brief Retrieves the final correspondences after refinement.
+   * @return A list of final correspondences (index pairs).
+   */
+  inline std::vector<std::pair<int, int>> getFinalCorrespondences() {
     return robin_matching_->getFinalCorrespondences();
   }
 
+  /**
+   * @brief Gets the number of rotation inliers after solving.
+   * @return Number of final rotation inliers from
+   * @graduated non-convexity (GNC) solver
+   */
+  inline size_t getNumRotationInliers() { return solver_->getRotationInliers().size(); }
+
+  /**
+   * @brief Gets the number of final inliers after solving.
+   * @return Number of final translation inliers from
+   * @component-wise translation estimation (COTE)
+   * @note This number can be used to check whether the optimization is valid.
+   */
+  inline size_t getNumFinalInliers() { return solver_->getTranslationInliers().size(); }
+
   void clear() {
+    src_processed_.clear();
+    tgt_processed_.clear();
     src_keypoints_.clear();
     tgt_keypoints_.clear();
     src_keypoints_.clear();
@@ -186,6 +285,13 @@ class KISSMatcher {
 
  private:
   KISSMatcherConfig config_;
+
+  std::unique_ptr<FasterPFH> faster_pfh_;
+  std::unique_ptr<ROBINMatching> robin_matching_;
+  std::unique_ptr<RobustRegistrationSolver> solver_;
+
+  std::vector<Eigen::Vector3f> src_processed_;
+  std::vector<Eigen::Vector3f> tgt_processed_;
 
   std::vector<Eigen::Vector3f> src_keypoints_;
   std::vector<Eigen::Vector3f> tgt_keypoints_;
